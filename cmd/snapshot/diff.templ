@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{template "head.templ"}}
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="col-xs-12">
+          <h1>Diff</h1>
+          <a href="/list">Back</a>
+          <table class="table">
+            <tr>
+              <thead>
+                <tr><th>path</th><th>old</th><th>new</th></tr>
+              </thead>
+              <tbody>
+                {{range .Lines}}
+                <tr class="{{if .IsAdded}} success{{end}}{{if .IsRemoved}} danger{{end}}">
+                  <td>{{.Path}}</td>
+                  <td>{{.OldValue}}</td>
+                  <td>{{.NewValue}}</td>
+                </tr>
+                {{end}}
+              </tbody>
+          </table>
+          {{template "foot.templ"}}
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

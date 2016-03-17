@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{template "head.templ"}}
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="col-xs-12">
+          <h1>Names</h1>
+          <form action="take" method="post">
+            <button type="submit">Take Snapshot</button>
+          </form>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-xs-12">
+          <form action="/diff" method="get">
+            <table class="table">
+              <tr>
+                <thead>
+                  <tr><th>1st</th><th>2nd</th><th>name</th></tr>
+                </thead>
+                <tbody>
+                  {{range .Names}}
+                  <tr>
+                    <td><input type="radio" name="ss1" value="{{.N}}"/></td>
+                    <td><input type="radio" name="ss2" value="{{.N}}"/></td>
+                    <td>{{.Name}}</td>
+                  </tr>
+                  {{end}}
+                </tbody>
+            </table>
+            <button type="submit">Diff</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {{template "foot.templ"}}
+  </body>
+</html>
