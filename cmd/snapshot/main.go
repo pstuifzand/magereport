@@ -147,7 +147,7 @@ func (magento *Magento) Close() {
 	magento.Db.Close()
 }
 
-func (magento *Magento) Snapshot(outputFilename string) error {
+func (magento *Magento) TakeSnapshot(outputFilename string) error {
 	db := magento.Db
 
 	vars, err := DatabaseLoadConfig(db)
@@ -165,7 +165,7 @@ func (magento *Magento) Snapshot(outputFilename string) error {
 
 func (magento *Magento) ListSnapshots() ([]string, error) {
 	result := []string{}
-	dir, err := os.Open(".")
+	dir, err := os.Open(".snapshots")
 	if err != nil {
 		return result, err
 	}
@@ -195,7 +195,7 @@ func (magento *Magento) List() error {
 }
 
 func (magento *Magento) LoadSnapshot(filename string) (map[string]string, error) {
-	oldVars, err := loadOldVars(filename)
+	oldVars, err := loadOldVars(".snapshots/" + filename)
 	return oldVars, err
 }
 
@@ -268,7 +268,14 @@ func main() {
 
 	if cmd == "take" || cmd == "get" {
 		t := time.Now()
-		err = magento.Snapshot(fmt.Sprintf("snapshot-%s.json", t.Format("2006-01-02_15-04-05")))
+
+		dir, err := os.Open(".snapshots")
+		if err != nil && os.IsNotExist(err) {
+			log.Fatal(err)
+		}
+		defer dir.Close()
+
+		err = magento.TakeSnapshot(fmt.Sprintf(".snapshots/snapshot-%s.json", t.Format("2006-01-02_15-04-05")))
 		if err != nil {
 			log.Fatal(err)
 		}
