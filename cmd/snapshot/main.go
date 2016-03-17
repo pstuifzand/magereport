@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -214,10 +215,24 @@ func (magento *Magento) LoadSnapshot(filename string) (map[string]string, error)
 type DiffLine struct {
 	Path, OldValue, NewValue      string
 	IsAdded, IsRemoved, IsChanged bool
+	Scope                         string
+	ScopeId                       int64
 }
 
 type DiffResult struct {
 	Lines []DiffLine
+}
+
+var pathRegexp *regexp.Regexp
+
+func MakeDiffLine(path, oldval, newval string) DiffLine {
+	isAdded := newval != "" && oldval == ""
+	isRemoved := newval == "" && oldval != ""
+	isChanged := newval != "" && oldval != "" && oldval != newval
+	parts := pathRegexp.FindStringSubmatch(path)
+	scope := parts[2]
+	scopeId, _ := strconv.ParseInt(parts[3], 10, 64)
+	return DiffLine{parts[1], oldval, newval, isAdded, isRemoved, isChanged, scope, scopeId}
 }
 
 func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string) (DiffResult, error) {
@@ -252,16 +267,15 @@ func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string) (DiffResult, e
 		missing[path] = false
 		if oldVal, e := oldVars[path]; e {
 			if oldVal != val {
-				result.Lines = append(result.Lines, DiffLine{path, oldVal, val,
-					false, false, true})
+				result.Lines = append(result.Lines, MakeDiffLine(path, oldVal, val))
 			}
 		} else {
-			result.Lines = append(result.Lines, DiffLine{path, "", val, true, false, false})
+			result.Lines = append(result.Lines, MakeDiffLine(path, "", val))
 		}
 	}
 	for k, v := range missing {
 		if v {
-			result.Lines = append(result.Lines, DiffLine{k, oldVars[k], "", false, true, false})
+			result.Lines = append(result.Lines, MakeDiffLine(k, oldVars[k], ""))
 		}
 	}
 
@@ -272,6 +286,7 @@ var format *string
 
 func init() {
 	format = flag.String("format", "text", "format of output")
+	pathRegexp = regexp.MustCompile("^(.*)-(default|websites|stores)-(\\d+)$")
 }
 
 type SnapshotHandler struct {
