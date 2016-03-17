@@ -4,12 +4,16 @@ import (
 	"database/sql"
 	"encoding/json"
 	"encoding/xml"
+	"flag"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"log"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Connection struct {
@@ -123,22 +127,83 @@ func saveOldVars(filename string, vars map[string]string) error {
 	return nil
 }
 
-func main() {
+type Magento struct {
+	Db *sql.DB
+}
 
-	url, err := DatabaseConnectionString("app/etc/local.xml")
+func InitMagento(config string) (*Magento, error) {
+	url, err := DatabaseConnectionString(config)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	db, err := sql.Open("mysql", url)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	stateFilename := "config-report.json"
+	return &Magento{db}, nil
+}
 
-	firstRun := false
-	oldVars, err := loadOldVars(stateFilename)
+func (magento *Magento) Close() {
+	magento.Db.Close()
+}
+
+func (magento *Magento) Snapshot(outputFilename string) error {
+	db := magento.Db
+
+	vars, err := DatabaseLoadConfig(db)
 	if err != nil {
-		firstRun = true
+		return err
+	}
+
+	err = saveOldVars(outputFilename, vars)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (magento *Magento) ListSnapshots() ([]string, error) {
+	result := []string{}
+	dir, err := os.Open(".")
+	if err != nil {
+		return result, err
+	}
+	defer dir.Close()
+	names, err := dir.Readdirnames(-1)
+	if err != nil {
+		return result, err
+	}
+	sort.Strings(names)
+	for _, filename := range names {
+		if strings.HasPrefix(filename, "snapshot-") {
+			result = append(result, filename)
+		}
+	}
+	return result, nil
+}
+
+func (magento *Magento) List() error {
+	names, err := magento.ListSnapshots()
+	if err != nil {
+		return err
+	}
+	for i, filename := range names {
+		fmt.Printf("% 4d\t%s\n", i+1, filename)
+	}
+	return nil
+}
+
+func (magento *Magento) LoadSnapshot(filename string) (map[string]string, error) {
+	oldVars, err := loadOldVars(filename)
+	return oldVars, err
+}
+
+func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string) error {
+	log.Printf("Diff between %s and %s\n", snapshotFile1, snapshotFile2)
+	oldVars, err := magento.LoadSnapshot(snapshotFile1)
+	if err != nil {
+		return err
 	}
 
 	missing := make(map[string]bool)
@@ -146,21 +211,27 @@ func main() {
 		missing[k] = true
 	}
 
-	vars, err := DatabaseLoadConfig(db)
+	vars, err := magento.LoadSnapshot(snapshotFile2)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	for path, val := range vars {
+	paths := []string{}
+	for k, _ := range vars {
+		paths = append(paths, k)
+	}
+
+	sort.Strings(paths)
+
+	for _, path := range paths {
+		val := vars[path]
 		missing[path] = false
-		if !firstRun {
-			if oldVal, e := oldVars[path]; e {
-				if oldVal != val {
-					fmt.Printf("%s\n\told: %s\n\tnew: %s\n\n", path, oldVal, val)
-				}
-			} else {
-				fmt.Printf("%s\n\tnew: %s\n\n", path, val)
+		if oldVal, e := oldVars[path]; e {
+			if oldVal != val {
+				fmt.Printf("%s\n\told: %s\n\tnew: %s\n\n", path, oldVal, val)
 			}
+		} else {
+			fmt.Printf("%s\n\tnew: %s\n\n", path, val)
 		}
 	}
 	for k, v := range missing {
@@ -169,8 +240,53 @@ func main() {
 		}
 	}
 
-	err = saveOldVars(stateFilename, vars)
+	return nil
+}
+
+var format *string
+
+func init() {
+	format = flag.String("format", "text", "format of output")
+}
+
+func main() {
+	flag.Parse()
+
+	args := flag.Args()
+	var cmd string
+	if len(args) == 0 {
+		cmd = "take"
+	} else {
+		cmd = args[0]
+	}
+
+	magento, err := InitMagento("app/etc/local.xml")
 	if err != nil {
-		log.Fatalf("Error: Can't open %s for writing: %s\n", stateFilename, err)
+		log.Fatal(err)
+	}
+	defer magento.Close()
+
+	if cmd == "take" || cmd == "get" {
+		t := time.Now()
+		err = magento.Snapshot(fmt.Sprintf("snapshot-%s.json", t.Format("2006-01-02_15-04-05")))
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else if cmd == "list" {
+		err = magento.List()
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else if cmd == "diff" {
+		names, err := magento.ListSnapshots()
+		if err != nil {
+			log.Fatal(err)
+		}
+		ss1, _ := strconv.ParseInt(args[1], 10, 32)
+		ss2, _ := strconv.ParseInt(args[2], 10, 32)
+		err = magento.Diff(names[ss1-1], names[ss2-1])
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
