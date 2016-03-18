@@ -236,7 +236,6 @@ func MakeDiffLine(path, oldval, newval string) DiffLine {
 }
 
 func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string) (DiffResult, error) {
-	log.Printf("Diff between %s and %s\n", snapshotFile1, snapshotFile2)
 	oldVars, err := magento.LoadSnapshot(snapshotFile1)
 	if err != nil {
 		return DiffResult{}, err
@@ -345,7 +344,6 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 		values := r.URL.Query()
 		ss1, _ := strconv.ParseInt(values.Get("ss1"), 10, 32)
 		ss2, _ := strconv.ParseInt(values.Get("ss2"), 10, 32)
-		log.Printf("diff %d %d\n", ss1-1, ss2-1)
 		diff, err := magento.Diff(names[ss1-1].Name, names[ss2-1].Name)
 
 		accept := r.Header.Get("Accept")
