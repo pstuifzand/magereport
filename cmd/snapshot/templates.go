@@ -90,6 +90,7 @@ func init() {
                     <td><input type="radio" name="ss1" value="{{.N}}"/></td>
                     <td><input type="radio" name="ss2" value="{{.N}}"/></td>
                     <td>{{.Name}}</td>
+                    <td>{{.Time}}</td>
                     <td class="{{if gt .Count.Added 0}}success{{end}}">{{.Count.Added}}</td>
                     <td class="{{if gt .Count.Changed 0}}info{{end}}">{{.Count.Changed}}</td>
                     <td class="{{if gt .Count.Removed 0}}danger{{end}}">{{.Count.Removed}}</td>

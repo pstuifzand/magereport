@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 var format *string
@@ -75,8 +76,9 @@ func main() {
 		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
 		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name)
 		for _, r := range diff.Lines {
+			value := strings.Replace(r.NewValue, "\n", "\\n", -1)
 			fmt.Printf(`config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
-				r.Scope, r.ScopeId, r.Path, r.NewValue)
+				r.Scope, r.ScopeId, r.Path, value)
 			fmt.Println("")
 		}
 

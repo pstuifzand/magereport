@@ -14,15 +14,27 @@ import (
 )
 
 var pathRegexp *regexp.Regexp
+var fileRegexp *regexp.Regexp
 
 func init() {
 	pathRegexp = regexp.MustCompile("^(.*)-(default|websites|stores)-(\\d+)$")
+	fileRegexp = regexp.MustCompile(`^snapshot-(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2}).json$`)
 }
 
 type Snapshot struct {
 	N     int
 	Name  string
 	Count DiffResultCount
+	Time  time.Time
+}
+
+func (self *DiffResultCount) String() string {
+	return fmt.Sprintf("A%d C%d R%d",
+		self.Added, self.Removed, self.Changed)
+}
+
+func (this *Snapshot) String() string {
+	return fmt.Sprintf("% 4d %-20s %s %v", this.N, this.Name, this.Count.String(), this.Time)
 }
 
 func loadOldVars(filename string) (map[string]string, error) {
@@ -65,8 +77,8 @@ func (magento *Magento) createSnapshotDir() {
 	defer dir.Close()
 }
 
-func InitMagento(config string) (*Magento, error) {
-	url, err := DatabaseConnectionString(config)
+func InitMagento(configFilename string) (*Magento, error) {
+	url, err := DatabaseConnectionString(configFilename)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +94,7 @@ func (magento *Magento) Close() {
 }
 
 func (magento *Magento) TakeSnapshot() error {
-	t := time.Now()
+	t := time.Now().UTC()
 
 	magento.createSnapshotDir()
 
@@ -118,6 +130,15 @@ func (magento *Magento) ListSnapshots() ([]Snapshot, error) {
 	sort.Strings(names)
 	for i, filename := range names {
 		if strings.HasPrefix(filename, "snapshot-") {
+			parts := fileRegexp.FindStringSubmatch(filename)
+			d := parts[1]
+			t := parts[2]
+
+			tm, err := time.Parse("2006-01-02 15-04-05", d+" "+t)
+			if err != nil {
+				tm = time.Now().UTC()
+			}
+
 			count := DiffResultCount{0, 0, 0}
 			if i >= 1 {
 				prevFile := names[i-1]
@@ -126,7 +147,7 @@ func (magento *Magento) ListSnapshots() ([]Snapshot, error) {
 					count = diffResult.Count
 				}
 			}
-			result = append(result, Snapshot{i + 1, filename, count})
+			result = append(result, Snapshot{i + 1, filename, count, tm})
 		}
 	}
 	return result, nil
@@ -138,7 +159,8 @@ func (magento *Magento) List() error {
 		return err
 	}
 	for _, ss := range names {
-		fmt.Printf("% 4d\t%s\n", ss.N, ss.Name)
+		fmt.Printf("%s\n", ss.String())
+		//fmt.Printf("% 4d\t%s\n", ss.N, ss.Name)
 	}
 	return nil
 }
