@@ -382,7 +382,7 @@ func main() {
 	args := flag.Args()
 	var cmd string
 	if len(args) == 0 {
-		cmd = "take"
+		cmd = "help"
 	} else {
 		cmd = args[0]
 	}
@@ -423,6 +423,18 @@ func main() {
 				fmt.Printf("%s\n\told: %s\n\tnew: %s\n\n", r.Path, r.OldValue, r.NewValue)
 			}
 		}
+	} else if cmd == "help" {
+		fmt.Print(`
+Take config snapshots and show differences
+Usage: snapshot [command] [options]
+
+Commands:
+serve     serves the snapshots in a webserver
+take      takes a snapshots of the current configuration in the database
+list      lists snapshots for current dir
+diff A B  show the differences between snapshot A and snapshot B [diff 1 3]
+help      this list
+`)
 	} else if cmd == "serve" {
 		snapshotHandler := NewSnapshotHandler(magento)
 		http.Handle("/", snapshotHandler)
