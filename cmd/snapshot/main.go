@@ -345,12 +345,27 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 		names, err := magento.ListSnapshots()
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
+			return
 		}
 
 		values := r.URL.Query()
-		ss1, _ := strconv.ParseInt(values.Get("ss1"), 10, 32)
-		ss2, _ := strconv.ParseInt(values.Get("ss2"), 10, 32)
-		diff, err := magento.Diff(names[ss1-1].Name, names[ss2-1].Name)
+		ss1, err := strconv.ParseInt(values.Get("ss1"), 10, 32)
+		if err != nil {
+			http.Error(w, "Argument not a number", 400)
+			return
+		}
+		ss2, err := strconv.ParseInt(values.Get("ss2"), 10, 32)
+		if err != nil {
+			http.Error(w, "Argument not a number", 400)
+			return
+		}
+		ss1 -= 1
+		ss2 -= 1
+		if (ss1 < 0 && int(ss1) >= len(names)) || ss2 < 0 && int(ss2) >= len(names) {
+			http.Error(w, "Argument out of range", 400)
+			return
+		}
+		diff, err := magento.Diff(names[ss1].Name, names[ss2].Name)
 
 		accept := r.Header.Get("Accept")
 		if strings.Contains(accept, "application/json") {
