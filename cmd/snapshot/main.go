@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -326,15 +325,11 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			w.Header().Add("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(names)
 		} else {
-			templ, err := template.New("list.templ").ParseFiles(
-				"/home/peter/work/go/src/github.com/pstuifzand/magereport/cmd/snapshot/list.templ",
-				"/home/peter/work/go/src/github.com/pstuifzand/magereport/cmd/snapshot/head.templ",
-				"/home/peter/work/go/src/github.com/pstuifzand/magereport/cmd/snapshot/foot.templ")
 
 			if err != nil {
 				http.Error(w, fmt.Sprint(err), 500)
 			} else {
-				err = templ.Execute(w, ListInfo{names})
+				err = TT.ExecuteTemplate(w, "List", ListInfo{names})
 				if err != nil {
 					http.Error(w, fmt.Sprint(err), 500)
 				}
@@ -372,15 +367,10 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			w.Header().Add("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(names)
 		} else {
-			templ, err := template.New("diff.templ").ParseFiles(
-				"/home/peter/work/go/src/github.com/pstuifzand/magereport/cmd/snapshot/diff.templ",
-				"/home/peter/work/go/src/github.com/pstuifzand/magereport/cmd/snapshot/head.templ",
-				"/home/peter/work/go/src/github.com/pstuifzand/magereport/cmd/snapshot/foot.templ")
-
 			if err != nil {
 				http.Error(w, fmt.Sprint(err), 500)
 			} else {
-				err = templ.Execute(w, diff)
+				err = TT.ExecuteTemplate(w, "Diff", diff)
 				if err != nil {
 					http.Error(w, fmt.Sprint(err), 500)
 				}
