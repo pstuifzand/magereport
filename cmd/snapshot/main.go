@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -16,6 +17,27 @@ func init() {
 	format = flag.String("format", "text", "format of output")
 	port = flag.Int("port", 8080, "port")
 	host = flag.String("host", "0.0.0.0", "host")
+}
+
+type DiffRevs struct {
+	Old, New int
+}
+
+func GetDiffRevs(oldref, newref string, maxCount int) (DiffRevs, error) {
+	ss1, err := strconv.ParseInt(oldref, 10, 32)
+	if err != nil {
+		return DiffRevs{}, err
+	}
+	ss2, err := strconv.ParseInt(newref, 10, 32)
+	if err != nil {
+		return DiffRevs{}, err
+	}
+	ss1 -= 1
+	ss2 -= 1
+	if (ss1 < 0 && int(ss1) >= maxCount) || (ss2 < 0 && int(ss2) >= maxCount) {
+		return DiffRevs{}, errors.New("Argument is out of range")
+	}
+	return DiffRevs{int(ss1), int(ss2)}, nil
 }
 
 func main() {
@@ -45,14 +67,27 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+	} else if cmd == "export" {
+		names, err := magento.ListSnapshots()
+		if err != nil {
+			log.Fatal(err)
+		}
+		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
+		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name)
+		for _, r := range diff.Lines {
+			fmt.Printf(`config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
+				r.Scope, r.ScopeId, r.Path, r.NewValue)
+			fmt.Println("")
+		}
+
 	} else if cmd == "diff" {
 		names, err := magento.ListSnapshots()
 		if err != nil {
 			log.Fatal(err)
 		}
-		ss1, _ := strconv.ParseInt(args[1], 10, 32)
-		ss2, _ := strconv.ParseInt(args[2], 10, 32)
-		diff, err := magento.Diff(names[ss1-1].Name, names[ss2-1].Name)
+		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
+
+		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name)
 		if err != nil {
 			log.Fatal(err)
 		}
