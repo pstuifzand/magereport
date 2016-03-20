@@ -134,6 +134,15 @@ type Magento struct {
 	Db *sql.DB
 }
 
+func (magento *Magento) createSnapshotDir() {
+	dir, err := os.Open(".snapshots")
+	if err != nil && os.IsNotExist(err) {
+		os.Mkdir(".snapshots", 0755)
+		return
+	}
+	defer dir.Close()
+}
+
 func InitMagento(config string) (*Magento, error) {
 	url, err := DatabaseConnectionString(config)
 	if err != nil {
@@ -153,11 +162,7 @@ func (magento *Magento) Close() {
 func (magento *Magento) TakeSnapshot() error {
 	t := time.Now()
 
-	dir, err := os.Open(".snapshots")
-	if err != nil && os.IsNotExist(err) {
-		log.Fatal(err)
-	}
-	defer dir.Close()
+	magento.createSnapshotDir()
 
 	outputFilename := fmt.Sprintf(".snapshots/snapshot-%s.json", t.Format("2006-01-02_15-04-05"))
 
@@ -180,7 +185,8 @@ func (magento *Magento) ListSnapshots() ([]Snapshot, error) {
 	result := []Snapshot{}
 	dir, err := os.Open(".snapshots")
 	if err != nil {
-		return result, err
+		// no results, because not dir (not an error)
+		return result, nil
 	}
 	defer dir.Close()
 	names, err := dir.Readdirnames(-1)
@@ -388,7 +394,7 @@ func main() {
 	defer magento.Close()
 
 	if cmd == "take" || cmd == "get" {
-		magento.TakeSnapshot()
+		err = magento.TakeSnapshot()
 		if err != nil {
 			log.Fatal(err)
 		}
