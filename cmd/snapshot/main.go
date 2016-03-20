@@ -424,8 +424,7 @@ func main() {
 			}
 		}
 	} else if cmd == "help" {
-		fmt.Print(`
-Take config snapshots and show differences
+		fmt.Print(`Take config snapshots and show differences
 Usage: snapshot [command] [options]
 
 Commands:
