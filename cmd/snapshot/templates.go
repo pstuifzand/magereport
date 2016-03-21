@@ -74,6 +74,7 @@ func init() {
           <h1>Snapshots</h1>
           <form action="take" method="post">
             <button type="submit" class="btn btn-default">Take Snapshot</button>
+            <input type="text" name="message" />
           </form>
         </div>
       </div>

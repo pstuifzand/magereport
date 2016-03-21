@@ -23,7 +23,8 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 	magento := snapshotHandler.Magento
 	values := r.URL.Query()
 	if strings.HasPrefix("/take", r.URL.Path) {
-		magento.TakeSnapshot()
+		message := r.Form.Get("message")
+		magento.TakeSnapshot(message)
 		http.Redirect(w, r, "/list", 302)
 		return
 	} else if strings.HasPrefix("/list", r.URL.Path) {

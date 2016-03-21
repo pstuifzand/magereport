@@ -13,11 +13,13 @@ import (
 var format *string
 var host *string
 var port *int
+var message *string
 
 func init() {
 	format = flag.String("format", "text", "format of output")
 	port = flag.Int("port", 8080, "port")
 	host = flag.String("host", "0.0.0.0", "host")
+	message = flag.String("m", "", "add a message to the snapshot")
 }
 
 type DiffRevs struct {
@@ -59,7 +61,9 @@ func main() {
 	defer magento.Close()
 
 	if cmd == "take" || cmd == "get" {
-		err = magento.TakeSnapshot()
+		msg := ""
+		msg = *message
+		err = magento.TakeSnapshot(msg)
 		if err != nil {
 			log.Fatal(err)
 		}

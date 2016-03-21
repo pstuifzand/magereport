@@ -41,23 +41,34 @@ func (this *Snapshot) String() string {
 	return fmt.Sprintf("% 4d %-20s %s %v", this.N, this.Name, this.Count.String(), this.Time)
 }
 
-func loadOldVars(filename string) (map[string]string, error) {
+type FileSnapshot struct {
+	Message string
+	Vars    map[string]string
+}
+
+func loadOldVars(filename string) (FileSnapshot, error) {
 	input, err := os.Open(filename)
 	if err != nil {
-		return nil, err
+		return FileSnapshot{}, err
 	}
 	defer input.Close()
 
 	r := json.NewDecoder(input)
-	var vars map[string]string
+	var vars FileSnapshot
 	err = r.Decode(&vars)
 	if err != nil {
-		return nil, err
+		input.Seek(0, 0)
+		r = json.NewDecoder(input)
+		var configVars map[string]string
+		err = r.Decode(&configVars)
+		vars.Vars = configVars
+		vars.Message = ""
+		return FileSnapshot{}, err
 	}
 	return vars, nil
 }
 
-func saveOldVars(filename string, vars map[string]string) error {
+func saveOldVars(filename string, vars FileSnapshot) error {
 	output, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -97,7 +108,7 @@ func (magento *Magento) Close() {
 	magento.db.Close()
 }
 
-func (magento *Magento) TakeSnapshot() error {
+func (magento *Magento) TakeSnapshot(message string) error {
 	t := time.Now().UTC()
 
 	magento.createSnapshotDir()
@@ -110,8 +121,9 @@ func (magento *Magento) TakeSnapshot() error {
 	if err != nil {
 		return err
 	}
+	fs := FileSnapshot{message, vars}
 
-	err = saveOldVars(outputFilename, vars)
+	err = saveOldVars(outputFilename, fs)
 	if err != nil {
 		return err
 	}
@@ -169,7 +181,7 @@ func (magento *Magento) List() error {
 	return nil
 }
 
-func (magento *Magento) LoadSnapshot(filename string) (map[string]string, error) {
+func (magento *Magento) LoadSnapshot(filename string) (FileSnapshot, error) {
 	oldVars, err := loadOldVars(".snapshots/" + filename)
 	return oldVars, err
 }
@@ -202,23 +214,23 @@ func makeDiffLine(path, oldval, newval string) DiffLine {
 }
 
 func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string, from, to int) (DiffResult, error) {
-	oldVars, err := magento.LoadSnapshot(snapshotFile1)
+	oldSnapshot, err := magento.LoadSnapshot(snapshotFile1)
 	if err != nil {
 		return DiffResult{}, err
 	}
 
 	missing := make(map[string]bool)
-	for k, _ := range oldVars {
+	for k, _ := range oldSnapshot.Vars {
 		missing[k] = true
 	}
 
-	vars, err := magento.LoadSnapshot(snapshotFile2)
+	newSnapshot, err := magento.LoadSnapshot(snapshotFile2)
 	if err != nil {
 		return DiffResult{}, err
 	}
 
 	paths := []string{}
-	for k, _ := range vars {
+	for k, _ := range newSnapshot.Vars {
 		paths = append(paths, k)
 	}
 
@@ -232,9 +244,9 @@ func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string, from, to int) 
 	count := DiffResultCount{0, 0, 0}
 
 	for _, path := range paths {
-		val := vars[path]
+		val := newSnapshot.Vars[path]
 		missing[path] = false
-		if oldVal, e := oldVars[path]; e {
+		if oldVal, e := oldSnapshot.Vars[path]; e {
 			if oldVal != val {
 				result.Lines = append(result.Lines, makeDiffLine(path, oldVal, val))
 				count.Changed += 1
@@ -246,7 +258,7 @@ func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string, from, to int) 
 	}
 	for k, v := range missing {
 		if v {
-			result.Lines = append(result.Lines, makeDiffLine(k, oldVars[k], ""))
+			result.Lines = append(result.Lines, makeDiffLine(k, oldSnapshot.Vars[k], ""))
 			count.Removed += 1
 		}
 	}
