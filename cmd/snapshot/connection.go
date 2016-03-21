@@ -53,6 +53,12 @@ func DatabaseConnectionString(filename string) (string, error) {
 	xml.Unmarshal(b, &q)
 
 	conn := q.Global.Resources.Setup.Connection
-
+	if conn.Host == "localhost" {
+		sockname := "/var/run/mysqld/mysqld.sock"
+		_, err = os.Open(sockname)
+		if !os.IsNotExist(err) {
+			return conn.Username + ":" + conn.Password + "@unix(" + sockname + ")/" + conn.Dbname, nil
+		}
+	}
 	return conn.String(), nil
 }
