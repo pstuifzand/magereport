@@ -29,7 +29,7 @@ func init() {
       <div class="row">
         <div class="col-xs-12">
           <h1>Differences</h1>
-          <p><a href="/list">Back</a></p>
+          <p><a href="/list">Back</a> | <a href="/export?ss1={{.From}}&ss2={{.To}}">Export</a></p>
           <table class="table">
             <col width="20%"/>
             <col width="20%"/>
@@ -68,17 +68,19 @@ func init() {
   </head>
   <body>
     <div class="container">
+
       <div class="row">
         <div class="col-xs-12">
           <h1>Snapshots</h1>
           <form action="take" method="post">
-            <button type="submit">Take Snapshot</button>
+            <button type="submit" class="btn btn-default">Take Snapshot</button>
           </form>
         </div>
       </div>
+
       <div class="row">
         <div class="col-xs-12">
-          <form action="/diff" method="get">
+          <form action="/diff" method="get" class="form">
             <table class="table">
               <tr>
                 <thead>
@@ -98,7 +100,7 @@ func init() {
                   {{end}}
                 </tbody>
             </table>
-            <button type="submit">Diff</button>
+            <button type="submit" class="btn btn-default">Diff</button>
           </form>
         </div>
       </div>

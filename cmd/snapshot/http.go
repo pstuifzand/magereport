@@ -21,6 +21,7 @@ type ListInfo struct {
 
 func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	magento := snapshotHandler.Magento
+	values := r.URL.Query()
 	if strings.HasPrefix("/take", r.URL.Path) {
 		magento.TakeSnapshot()
 		http.Redirect(w, r, "/list", 302)
@@ -31,7 +32,7 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			http.Error(w, fmt.Sprint(err), 500)
 		}
 		accept := r.Header.Get("Accept")
-		if strings.Contains(accept, "application/json") {
+		if values.Get("format") == "json" || strings.Contains(accept, "application/json") {
 			w.Header().Add("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(names)
 		} else {
@@ -53,6 +54,39 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			return
 		}
 
+		diffRevs, err := GetDiffRevs(values.Get("ss1"), values.Get("ss2"), len(names))
+		if err != nil {
+			http.Error(w, fmt.Sprint(err), 400)
+			return
+		}
+
+		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name, diffRevs.Old, diffRevs.New)
+
+		accept := r.Header.Get("Accept")
+		if values.Get("format") == "json" || strings.Contains(accept, "application/json") {
+			w.Header().Add("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(diff)
+			return
+		} else {
+			if err != nil {
+				http.Error(w, fmt.Sprint(err), 500)
+				return
+			} else {
+				err = TT.ExecuteTemplate(w, "Diff", diff)
+				if err != nil {
+					http.Error(w, fmt.Sprint(err), 500)
+					return
+				}
+			}
+		}
+		return
+	} else if strings.HasPrefix("/export", r.URL.Path) {
+		names, err := magento.ListSnapshots()
+		if err != nil {
+			http.Error(w, fmt.Sprint(err), 500)
+			return
+		}
+
 		values := r.URL.Query()
 		diffRevs, err := GetDiffRevs(values.Get("ss1"), values.Get("ss2"), len(names))
 		if err != nil {
@@ -60,21 +94,13 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			return
 		}
 
-		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name)
-
-		accept := r.Header.Get("Accept")
-		if strings.Contains(accept, "application/json") {
-			w.Header().Add("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(names)
-		} else {
-			if err != nil {
-				http.Error(w, fmt.Sprint(err), 500)
-			} else {
-				err = TT.ExecuteTemplate(w, "Diff", diff)
-				if err != nil {
-					http.Error(w, fmt.Sprint(err), 500)
-				}
-			}
+		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name, diffRevs.Old, diffRevs.New)
+		w.Header().Add("Content-Type", "text/plain")
+		for _, r := range diff.Lines {
+			value := strings.Replace(r.NewValue, "\n", "\\n", -1)
+			fmt.Fprintf(w, `config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
+				r.Scope, r.ScopeId, r.Path, value)
+			fmt.Fprintln(w, "")
 		}
 		return
 	}

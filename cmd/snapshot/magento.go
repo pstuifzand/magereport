@@ -28,6 +28,10 @@ type Snapshot struct {
 	Time  time.Time
 }
 
+func (self *DiffResultCount) Changes() int {
+	return self.Added + self.Removed + self.Changed
+}
+
 func (self *DiffResultCount) String() string {
 	return fmt.Sprintf("A%d C%d R%d",
 		self.Added, self.Removed, self.Changed)
@@ -142,7 +146,7 @@ func (magento *Magento) ListSnapshots() ([]Snapshot, error) {
 			count := DiffResultCount{0, 0, 0}
 			if i >= 1 {
 				prevFile := names[i-1]
-				diffResult, err := magento.Diff(prevFile, filename)
+				diffResult, err := magento.Diff(prevFile, filename, i, i+1)
 				if err == nil {
 					count = diffResult.Count
 				}
@@ -182,11 +186,12 @@ type DiffResultCount struct {
 }
 
 type DiffResult struct {
-	Lines []DiffLine
-	Count DiffResultCount
+	Lines    []DiffLine
+	Count    DiffResultCount
+	From, To int
 }
 
-func MakeDiffLine(path, oldval, newval string) DiffLine {
+func makeDiffLine(path, oldval, newval string) DiffLine {
 	isAdded := newval != "" && oldval == ""
 	isRemoved := newval == "" && oldval != ""
 	isChanged := newval != "" && oldval != "" && oldval != newval
@@ -196,7 +201,7 @@ func MakeDiffLine(path, oldval, newval string) DiffLine {
 	return DiffLine{parts[1], oldval, newval, isAdded, isRemoved, isChanged, scope, scopeId}
 }
 
-func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string) (DiffResult, error) {
+func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string, from, to int) (DiffResult, error) {
 	oldVars, err := magento.LoadSnapshot(snapshotFile1)
 	if err != nil {
 		return DiffResult{}, err
@@ -221,6 +226,8 @@ func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string) (DiffResult, e
 
 	result := DiffResult{}
 	result.Lines = []DiffLine{}
+	result.From = from + 1
+	result.To = to + 1
 
 	count := DiffResultCount{0, 0, 0}
 
@@ -229,17 +236,17 @@ func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string) (DiffResult, e
 		missing[path] = false
 		if oldVal, e := oldVars[path]; e {
 			if oldVal != val {
-				result.Lines = append(result.Lines, MakeDiffLine(path, oldVal, val))
+				result.Lines = append(result.Lines, makeDiffLine(path, oldVal, val))
 				count.Changed += 1
 			}
 		} else {
-			result.Lines = append(result.Lines, MakeDiffLine(path, "", val))
+			result.Lines = append(result.Lines, makeDiffLine(path, "", val))
 			count.Added += 1
 		}
 	}
 	for k, v := range missing {
 		if v {
-			result.Lines = append(result.Lines, MakeDiffLine(k, oldVars[k], ""))
+			result.Lines = append(result.Lines, makeDiffLine(k, oldVars[k], ""))
 			count.Removed += 1
 		}
 	}

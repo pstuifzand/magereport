@@ -74,7 +74,8 @@ func main() {
 			log.Fatal(err)
 		}
 		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
-		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name)
+		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name,
+			diffRevs.Old, diffRevs.New)
 		for _, r := range diff.Lines {
 			value := strings.Replace(r.NewValue, "\n", "\\n", -1)
 			fmt.Printf(`config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
@@ -89,7 +90,8 @@ func main() {
 		}
 		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
 
-		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name)
+		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name,
+			diffRevs.Old, diffRevs.New)
 		if err != nil {
 			log.Fatal(err)
 		}
