@@ -82,7 +82,7 @@ func init() {
             <table class="table">
               <tr>
                 <thead>
-                  <tr><th>1st</th><th>2nd</th><th>name</th><th>A</th><th>C</th><th>R</th></tr>
+                  <tr><th>1st</th><th>2nd</th><th>name</th><th>time</th><th>A</th><th>C</th><th>R</th></tr>
                 </thead>
                 <tbody>
                   {{range .Names}}
