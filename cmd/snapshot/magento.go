@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"log"
 	"os"
 	"regexp"
 	"sort"
@@ -56,14 +57,17 @@ func loadOldVars(filename string) (FileSnapshot, error) {
 	r := json.NewDecoder(input)
 	var vars FileSnapshot
 	err = r.Decode(&vars)
-	if err != nil {
+	if err != nil || len(vars.Vars) == 0 {
+		if err != nil {
+			log.Println(err)
+		}
 		input.Seek(0, 0)
 		r = json.NewDecoder(input)
 		var configVars map[string]string
 		err = r.Decode(&configVars)
 		vars.Vars = configVars
 		vars.Message = ""
-		return FileSnapshot{}, err
+		return vars, nil
 	}
 	return vars, nil
 }
