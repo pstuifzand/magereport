@@ -22,8 +22,13 @@ type ListInfo struct {
 func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	magento := snapshotHandler.Magento
 	values := r.URL.Query()
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, fmt.Sprint(err), 400)
+		return
+	}
 	if strings.HasPrefix("/take", r.URL.Path) {
-		message := r.Form.Get("message")
+		message := r.PostForm.Get("message")
 		magento.TakeSnapshot(message)
 		http.Redirect(w, r, "/list", 302)
 		return
