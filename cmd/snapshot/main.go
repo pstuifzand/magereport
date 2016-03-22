@@ -113,11 +113,17 @@ func main() {
 Usage: snapshot [command] [options]
 
 Commands:
-serve     serves the snapshots in a webserver
-take      takes a snapshots of the current configuration in the database
-list      lists snapshots for current dir
-diff A B  show the differences between snapshot A and snapshot B [diff 1 3]
-help      this list
+serve       serves the snapshots in a webserver
+take        takes a snapshots of the current configuration in the database
+list        lists snapshots for current dir
+diff A B    show the differences between snapshot A and snapshot B [diff 1 3]
+export A B  show the differences between snapshot A and snapshot B [export 1 3]
+            and exports the difference to magerun format "config:set"
+help        this list
+
+Options:
+-port=port  port for serve command
+-host=host  host for serve command
 `)
 	} else if cmd == "serve" {
 		snapshotHandler := NewSnapshotHandler(magento)
