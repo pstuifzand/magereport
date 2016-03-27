@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
 	"strconv"
-	"strings"
 )
 
 var format *string
@@ -77,11 +77,13 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		var newlinesRegexp *regexp.Regexp
+		newlinesRegexp = regexp.MustCompile("^\r?\n$")
 		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
 		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name,
 			diffRevs.Old, diffRevs.New)
 		for _, r := range diff.Lines {
-			value := strings.Replace(r.NewValue, "\n", "\\n", -1)
+			value := newlinesRegexp.ReplaceAllString(r.NewValue, "\\n")
 			fmt.Printf(`config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
 				r.Scope, r.ScopeId, r.Path, value)
 			fmt.Println("")
