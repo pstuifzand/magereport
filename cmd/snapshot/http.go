@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -99,11 +100,13 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			http.Error(w, fmt.Sprint(err), 400)
 			return
 		}
+		var newlinesRegexp *regexp.Regexp
+		newlinesRegexp = regexp.MustCompile("^\r?\n$")
 
 		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name, diffRevs.Old, diffRevs.New)
 		w.Header().Add("Content-Type", "text/plain")
 		for _, r := range diff.Lines {
-			value := strings.Replace(r.NewValue, "\n", "\\n", -1)
+			value := newlinesRegexp.ReplaceAllString(r.NewValue, "\\n")
 			fmt.Fprintf(w, `config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
 				r.Scope, r.ScopeId, r.Path, value)
 			fmt.Fprintln(w, "")
