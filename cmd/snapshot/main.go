@@ -68,9 +68,12 @@ func main() {
 			log.Fatal(err)
 		}
 	} else if cmd == "list" {
-		err = magento.List()
+		names, err := magento.ListSnapshots()
 		if err != nil {
 			log.Fatal(err)
+		}
+		for _, ss := range names {
+			fmt.Printf("%s\n", ss.String())
 		}
 	} else if cmd == "export" {
 		names, err := magento.ListSnapshots()
@@ -80,8 +83,15 @@ func main() {
 		var newlinesRegexp *regexp.Regexp
 		newlinesRegexp = regexp.MustCompile("^\r?\n$")
 		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
-		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name,
-			diffRevs.Old, diffRevs.New)
+		oldSnapshot, err := magento.LoadSnapshot(names[diffRevs.Old].Name)
+		if err != nil {
+			log.Fatal(err)
+		}
+		newSnapshot, err := magento.LoadSnapshot(names[diffRevs.New].Name)
+		if err != nil {
+			log.Fatal(err)
+		}
+		diff, err := Diff(oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
 		for _, r := range diff.Lines {
 			value := newlinesRegexp.ReplaceAllString(r.NewValue, "\\n")
 			fmt.Printf(`config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
@@ -96,8 +106,16 @@ func main() {
 		}
 		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
 
-		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name,
-			diffRevs.Old, diffRevs.New)
+		oldSnapshot, err := magento.LoadSnapshot(names[diffRevs.Old].Name)
+		if err != nil {
+			log.Fatal(err)
+		}
+		newSnapshot, err := magento.LoadSnapshot(names[diffRevs.New].Name)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		diff, err := Diff(oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
 		if err != nil {
 			log.Fatal(err)
 		}

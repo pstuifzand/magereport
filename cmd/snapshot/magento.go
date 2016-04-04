@@ -5,60 +5,35 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pstuifzand/magereport/backend"
 	"log"
 	"os"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
 
-var pathRegexp *regexp.Regexp
 var fileRegexp *regexp.Regexp
 
 func init() {
-	pathRegexp = regexp.MustCompile("^(.*)-(default|websites|stores)-(\\d+)$")
 	fileRegexp = regexp.MustCompile(`^snapshot-(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2}).json$`)
 }
 
-type Snapshot struct {
-	N     int
-	Name  string
-	Count DiffResultCount
-	Time  time.Time
-}
-
-func (self *DiffResultCount) Changes() int {
-	return self.Added + self.Removed + self.Changed
-}
-
-func (self *DiffResultCount) String() string {
-	return fmt.Sprintf("A%d C%d R%d",
-		self.Added, self.Removed, self.Changed)
-}
-
-func (this *Snapshot) String() string {
-	return fmt.Sprintf("% 4d %-20s %s %v", this.N, this.Name, this.Count.String(), this.Time)
-}
-
-type FileSnapshot struct {
-	Message string
-	Vars    map[string]string
-}
-
-func loadOldVars(filename string) (FileSnapshot, error) {
+func loadOldVars(filename string) (backend.SnapshotVars, error) {
 	input, err := os.Open(filename)
 	if err != nil {
-		return FileSnapshot{}, err
+		return backend.SnapshotVars{}, err
 	}
 	defer input.Close()
 
 	r := json.NewDecoder(input)
-	var vars FileSnapshot
+	var vars backend.SnapshotVars
 	err = r.Decode(&vars)
 	if err != nil || len(vars.Vars) == 0 {
 		if err != nil {
+			// Couldn't decode the new file version
+			// try the old version
 			log.Println(err)
 		}
 		input.Seek(0, 0)
@@ -72,7 +47,7 @@ func loadOldVars(filename string) (FileSnapshot, error) {
 	return vars, nil
 }
 
-func saveOldVars(filename string, vars FileSnapshot) error {
+func saveOldVars(filename string, vars backend.SnapshotVars) error {
 	output, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -125,7 +100,7 @@ func (magento *Magento) TakeSnapshot(message string) error {
 	if err != nil {
 		return err
 	}
-	fs := FileSnapshot{message, vars}
+	fs := backend.SnapshotVars{message, vars}
 
 	err = saveOldVars(outputFilename, fs)
 	if err != nil {
@@ -135,8 +110,8 @@ func (magento *Magento) TakeSnapshot(message string) error {
 	return nil
 }
 
-func (magento *Magento) ListSnapshots() ([]Snapshot, error) {
-	result := []Snapshot{}
+func (magento *Magento) ListSnapshots() ([]backend.Snapshot, error) {
+	result := []backend.Snapshot{}
 	dir, err := os.Open(".snapshots")
 	if err != nil {
 		// no results, because not dir (not an error)
@@ -159,115 +134,24 @@ func (magento *Magento) ListSnapshots() ([]Snapshot, error) {
 				tm = time.Now().UTC()
 			}
 
-			count := DiffResultCount{0, 0, 0}
+			count := backend.DiffResultCount{0, 0, 0}
 			if i >= 1 {
 				prevFile := names[i-1]
-				diffResult, err := magento.Diff(prevFile, filename, i, i+1)
+				prevSnapshot, err := magento.LoadSnapshot(prevFile)
+				curSnapshot, err := magento.LoadSnapshot(filename)
+
+				diffResult, err := Diff(prevSnapshot, curSnapshot, i, i+1)
 				if err == nil {
 					count = diffResult.Count
 				}
 			}
-			result = append(result, Snapshot{i + 1, filename, count, tm})
+			result = append(result, backend.Snapshot{i + 1, filename, count, tm})
 		}
 	}
 	return result, nil
 }
 
-func (magento *Magento) List() error {
-	names, err := magento.ListSnapshots()
-	if err != nil {
-		return err
-	}
-	for _, ss := range names {
-		fmt.Printf("%s\n", ss.String())
-		//fmt.Printf("% 4d\t%s\n", ss.N, ss.Name)
-	}
-	return nil
-}
-
-func (magento *Magento) LoadSnapshot(filename string) (FileSnapshot, error) {
+func (magento *Magento) LoadSnapshot(filename string) (backend.SnapshotVars, error) {
 	oldVars, err := loadOldVars(".snapshots/" + filename)
 	return oldVars, err
-}
-
-type DiffLine struct {
-	Path, OldValue, NewValue      string
-	IsAdded, IsRemoved, IsChanged bool
-	Scope                         string
-	ScopeId                       int64
-}
-
-type DiffResultCount struct {
-	Added, Changed, Removed int
-}
-
-type DiffResult struct {
-	Lines    []DiffLine
-	Count    DiffResultCount
-	From, To int
-}
-
-func makeDiffLine(path, oldval, newval string) DiffLine {
-	isAdded := newval != "" && oldval == ""
-	isRemoved := newval == "" && oldval != ""
-	isChanged := newval != "" && oldval != "" && oldval != newval
-	parts := pathRegexp.FindStringSubmatch(path)
-	scope := parts[2]
-	scopeId, _ := strconv.ParseInt(parts[3], 10, 64)
-	return DiffLine{parts[1], oldval, newval, isAdded, isRemoved, isChanged, scope, scopeId}
-}
-
-func (magento *Magento) Diff(snapshotFile1, snapshotFile2 string, from, to int) (DiffResult, error) {
-	oldSnapshot, err := magento.LoadSnapshot(snapshotFile1)
-	if err != nil {
-		return DiffResult{}, err
-	}
-
-	missing := make(map[string]bool)
-	for k, _ := range oldSnapshot.Vars {
-		missing[k] = true
-	}
-
-	newSnapshot, err := magento.LoadSnapshot(snapshotFile2)
-	if err != nil {
-		return DiffResult{}, err
-	}
-
-	paths := []string{}
-	for k, _ := range newSnapshot.Vars {
-		paths = append(paths, k)
-	}
-
-	sort.Strings(paths)
-
-	result := DiffResult{}
-	result.Lines = []DiffLine{}
-	result.From = from + 1
-	result.To = to + 1
-
-	count := DiffResultCount{0, 0, 0}
-
-	for _, path := range paths {
-		val := newSnapshot.Vars[path]
-		missing[path] = false
-		if oldVal, e := oldSnapshot.Vars[path]; e {
-			if oldVal != val {
-				result.Lines = append(result.Lines, makeDiffLine(path, oldVal, val))
-				count.Changed += 1
-			}
-		} else {
-			result.Lines = append(result.Lines, makeDiffLine(path, "", val))
-			count.Added += 1
-		}
-	}
-	for k, v := range missing {
-		if v {
-			result.Lines = append(result.Lines, makeDiffLine(k, oldSnapshot.Vars[k], ""))
-			count.Removed += 1
-		}
-	}
-
-	result.Count = count
-
-	return result, nil
 }

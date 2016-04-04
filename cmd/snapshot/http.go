@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/pstuifzand/magereport/backend"
 	"net/http"
-	"regexp"
 	"strings"
 )
 
@@ -17,7 +17,7 @@ func NewSnapshotHandler(magento *Magento) *SnapshotHandler {
 }
 
 type ListInfo struct {
-	Names []Snapshot
+	Names []backend.Snapshot
 }
 
 func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +67,18 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			return
 		}
 
-		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name, diffRevs.Old, diffRevs.New)
+		oldSnapshot, err := magento.LoadSnapshot(names[diffRevs.Old].Name)
+		if err != nil {
+			http.Error(w, fmt.Sprint(err), 500)
+			return
+		}
+		newSnapshot, err := magento.LoadSnapshot(names[diffRevs.New].Name)
+		if err != nil {
+			http.Error(w, fmt.Sprint(err), 500)
+			return
+		}
+
+		diff, err := Diff(oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
 
 		accept := r.Header.Get("Accept")
 		if values.Get("format") == "json" || strings.Contains(accept, "application/json") {
@@ -100,17 +111,27 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			http.Error(w, fmt.Sprint(err), 400)
 			return
 		}
-		var newlinesRegexp *regexp.Regexp
-		newlinesRegexp = regexp.MustCompile("^\r?\n$")
 
-		diff, err := magento.Diff(names[diffRevs.Old].Name, names[diffRevs.New].Name, diffRevs.Old, diffRevs.New)
-		w.Header().Add("Content-Type", "text/plain")
-		for _, r := range diff.Lines {
-			value := newlinesRegexp.ReplaceAllString(r.NewValue, "\\n")
-			fmt.Fprintf(w, `config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
-				r.Scope, r.ScopeId, r.Path, value)
-			fmt.Fprintln(w, "")
+		oldSnapshot, err := magento.LoadSnapshot(names[diffRevs.Old].Name)
+		if err != nil {
+			http.Error(w, fmt.Sprint(err), 500)
+			return
 		}
+
+		newSnapshot, err := magento.LoadSnapshot(names[diffRevs.New].Name)
+		if err != nil {
+			http.Error(w, fmt.Sprint(err), 500)
+			return
+		}
+
+		w.Header().Add("Content-Type", "text/plain")
+
+		err = Export(w, oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
+		if err != nil {
+			http.Error(w, fmt.Sprint(err), 500)
+			return
+		}
+
 		return
 	}
 	http.NotFound(w, r)
