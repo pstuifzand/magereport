@@ -1,11 +1,8 @@
-package main
+package backend
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/pstuifzand/magereport/backend"
 	"log"
 	"os"
 	"regexp"
@@ -20,15 +17,32 @@ func init() {
 	fileRegexp = regexp.MustCompile(`^snapshot-(\d{4}-\d{2}-\d{2})_(\d{2}-\d{2}-\d{2}).json$`)
 }
 
-func loadOldVars(filename string) (backend.SnapshotVars, error) {
+type FileBackend struct {
+	source SourceBackend
+}
+
+func InitFileBackend(source SourceBackend) Backend {
+	return &FileBackend{source}
+}
+
+func (this *FileBackend) TakeSnapshot(message string) error {
+	vars, err := this.source.TakeSnapshot(message)
+	if err != nil {
+		return err
+	}
+	err = this.SaveSnapshot(vars)
+	return err
+}
+
+func loadOldVars(filename string) (SnapshotVars, error) {
 	input, err := os.Open(filename)
 	if err != nil {
-		return backend.SnapshotVars{}, err
+		return SnapshotVars{}, err
 	}
 	defer input.Close()
 
 	r := json.NewDecoder(input)
-	var vars backend.SnapshotVars
+	var vars SnapshotVars
 	err = r.Decode(&vars)
 	if err != nil || len(vars.Vars) == 0 {
 		if err != nil {
@@ -47,7 +61,7 @@ func loadOldVars(filename string) (backend.SnapshotVars, error) {
 	return vars, nil
 }
 
-func saveOldVars(filename string, vars backend.SnapshotVars) error {
+func saveOldVars(filename string, vars SnapshotVars) error {
 	output, err := os.Create(filename)
 	if err != nil {
 		return err
@@ -58,11 +72,21 @@ func saveOldVars(filename string, vars backend.SnapshotVars) error {
 	return nil
 }
 
-type Magento struct {
-	db *sql.DB
+func (this *FileBackend) SaveSnapshot(vars SnapshotVars) error {
+	t := time.Now().UTC()
+
+	createSnapshotDir()
+	outputFilename := fmt.Sprintf(".snapshots/snapshot-%s.json", t.Format("2006-01-02_15-04-05"))
+
+	err := saveOldVars(outputFilename, vars)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (magento *Magento) createSnapshotDir() {
+func createSnapshotDir() {
 	dir, err := os.Open(".snapshots")
 	if err != nil && os.IsNotExist(err) {
 		os.Mkdir(".snapshots", 0755)
@@ -71,47 +95,8 @@ func (magento *Magento) createSnapshotDir() {
 	defer dir.Close()
 }
 
-func InitMagento(configFilename string) (*Magento, error) {
-	url, err := DatabaseConnectionString(configFilename)
-	if err != nil {
-		return nil, err
-	}
-	db, err := sql.Open("mysql", url)
-	if err != nil {
-		return nil, err
-	}
-	return &Magento{db}, nil
-}
-
-func (magento *Magento) Close() {
-	magento.db.Close()
-}
-
-func (magento *Magento) TakeSnapshot(message string) error {
-	t := time.Now().UTC()
-
-	magento.createSnapshotDir()
-
-	outputFilename := fmt.Sprintf(".snapshots/snapshot-%s.json", t.Format("2006-01-02_15-04-05"))
-
-	db := magento.db
-
-	vars, err := DatabaseLoadConfig(db)
-	if err != nil {
-		return err
-	}
-	fs := backend.SnapshotVars{message, vars}
-
-	err = saveOldVars(outputFilename, fs)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (magento *Magento) ListSnapshots() ([]backend.Snapshot, error) {
-	result := []backend.Snapshot{}
+func (this *FileBackend) ListSnapshots() ([]Snapshot, error) {
+	result := []Snapshot{}
 	dir, err := os.Open(".snapshots")
 	if err != nil {
 		// no results, because not dir (not an error)
@@ -134,24 +119,27 @@ func (magento *Magento) ListSnapshots() ([]backend.Snapshot, error) {
 				tm = time.Now().UTC()
 			}
 
-			count := backend.DiffResultCount{0, 0, 0}
+			count := DiffResultCount{0, 0, 0}
 			if i >= 1 {
 				prevFile := names[i-1]
-				prevSnapshot, err := magento.LoadSnapshot(prevFile)
-				curSnapshot, err := magento.LoadSnapshot(filename)
+				prevSnapshot, err := this.LoadSnapshot(prevFile)
+				curSnapshot, err := this.LoadSnapshot(filename)
 
 				diffResult, err := Diff(prevSnapshot, curSnapshot, i, i+1)
 				if err == nil {
 					count = diffResult.Count
 				}
 			}
-			result = append(result, backend.Snapshot{i + 1, filename, count, tm})
+			result = append(result, Snapshot{i + 1, filename, count, tm})
 		}
 	}
 	return result, nil
 }
 
-func (magento *Magento) LoadSnapshot(filename string) (backend.SnapshotVars, error) {
+func (this *FileBackend) LoadSnapshot(filename string) (SnapshotVars, error) {
 	oldVars, err := loadOldVars(".snapshots/" + filename)
 	return oldVars, err
+}
+
+func (this *FileBackend) Close() {
 }

@@ -1,8 +1,7 @@
-package main
+package backend
 
 import (
 	"fmt"
-	"github.com/pstuifzand/magereport/backend"
 	"io"
 	"regexp"
 	"sort"
@@ -15,17 +14,17 @@ func init() {
 	pathRegexp = regexp.MustCompile("^(.*)-(default|websites|stores)-(\\d+)$")
 }
 
-func makeDiffLine(path, oldval, newval string) backend.DiffLine {
+func makeDiffLine(path, oldval, newval string) DiffLine {
 	isAdded := newval != "" && oldval == ""
 	isRemoved := newval == "" && oldval != ""
 	isChanged := newval != "" && oldval != "" && oldval != newval
 	parts := pathRegexp.FindStringSubmatch(path)
 	scope := parts[2]
 	scopeId, _ := strconv.ParseInt(parts[3], 10, 64)
-	return backend.DiffLine{parts[1], oldval, newval, isAdded, isRemoved, isChanged, scope, scopeId}
+	return DiffLine{parts[1], oldval, newval, isAdded, isRemoved, isChanged, scope, scopeId}
 }
 
-func Diff(oldSnapshot, newSnapshot backend.SnapshotVars, from, to int) (backend.DiffResult, error) {
+func Diff(oldSnapshot, newSnapshot SnapshotVars, from, to int) (DiffResult, error) {
 	missing := make(map[string]bool)
 	for k, _ := range oldSnapshot.Vars {
 		missing[k] = true
@@ -38,12 +37,12 @@ func Diff(oldSnapshot, newSnapshot backend.SnapshotVars, from, to int) (backend.
 
 	sort.Strings(paths)
 
-	result := backend.DiffResult{}
-	result.Lines = []backend.DiffLine{}
+	result := DiffResult{}
+	result.Lines = []DiffLine{}
 	result.From = from + 1
 	result.To = to + 1
 
-	count := backend.DiffResultCount{0, 0, 0}
+	count := DiffResultCount{0, 0, 0}
 
 	for _, path := range paths {
 		val := newSnapshot.Vars[path]
@@ -71,14 +70,14 @@ func Diff(oldSnapshot, newSnapshot backend.SnapshotVars, from, to int) (backend.
 	return result, nil
 }
 
-func Export(w io.Writer, oldSnapshot, newSnapshot backend.SnapshotVars, from, to int) error {
+func Export(w io.Writer, oldSnapshot, newSnapshot SnapshotVars, from, to int) error {
 	diff, err := Diff(oldSnapshot, newSnapshot, from, to)
 	if err != nil {
 		return err
 	}
 
 	var newlinesRegexp *regexp.Regexp
-	newlinesRegexp = regexp.MustCompile("^\r?\n$")
+	newlinesRegexp = regexp.MustCompile("\r?\n")
 
 	for _, r := range diff.Lines {
 		value := newlinesRegexp.ReplaceAllString(r.NewValue, "\\n")

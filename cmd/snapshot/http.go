@@ -9,11 +9,11 @@ import (
 )
 
 type SnapshotHandler struct {
-	Magento *Magento
+	Backend backend.Backend
 }
 
-func NewSnapshotHandler(magento *Magento) *SnapshotHandler {
-	return &SnapshotHandler{magento}
+func NewSnapshotHandler(b backend.Backend) *SnapshotHandler {
+	return &SnapshotHandler{b}
 }
 
 type ListInfo struct {
@@ -21,7 +21,7 @@ type ListInfo struct {
 }
 
 func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	magento := snapshotHandler.Magento
+	magento := snapshotHandler.Backend
 	values := r.URL.Query()
 	err := r.ParseForm()
 	if err != nil {
@@ -78,7 +78,7 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			return
 		}
 
-		diff, err := Diff(oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
+		diff, err := backend.Diff(oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
 
 		accept := r.Header.Get("Accept")
 		if values.Get("format") == "json" || strings.Contains(accept, "application/json") {
@@ -126,7 +126,7 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 
 		w.Header().Add("Content-Type", "text/plain")
 
-		err = Export(w, oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
+		err = backend.Export(w, oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
 			return

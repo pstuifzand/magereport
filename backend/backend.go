@@ -17,12 +17,17 @@ type SnapshotVars struct {
 	Vars    map[string]string
 }
 
+type SourceBackend interface {
+	TakeSnapshot(message string) (SnapshotVars, error)
+	Close()
+}
+
 type Backend interface {
-	ListSnapshots() ([]Snapshot, error)
 	TakeSnapshot(message string) error
+	ListSnapshots() ([]Snapshot, error)
 	LoadSnapshot(filename string) (SnapshotVars, error)
 	SaveSnapshot(vars SnapshotVars) error
-	Diff(snapshotFile1, snapshotFile2 string, from, to int) (DiffResult, error)
+	Close()
 }
 
 type DiffResultCount struct {

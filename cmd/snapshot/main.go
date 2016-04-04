@@ -4,9 +4,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/pstuifzand/magereport/backend"
 	"log"
 	"net/http"
-	"regexp"
+	"os"
 	"strconv"
 )
 
@@ -54,21 +55,23 @@ func main() {
 		cmd = args[0]
 	}
 
-	magento, err := InitMagento("app/etc/local.xml")
+	magento, err := backend.InitMagento("app/etc/local.xml")
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer magento.Close()
 
+	fb := backend.InitFileBackend(magento)
+
 	if cmd == "take" || cmd == "get" {
 		msg := ""
 		msg = *message
-		err = magento.TakeSnapshot(msg)
+		err := fb.TakeSnapshot(msg)
 		if err != nil {
 			log.Fatal(err)
 		}
 	} else if cmd == "list" {
-		names, err := magento.ListSnapshots()
+		names, err := fb.ListSnapshots()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -76,46 +79,42 @@ func main() {
 			fmt.Printf("%s\n", ss.String())
 		}
 	} else if cmd == "export" {
-		names, err := magento.ListSnapshots()
+		names, err := fb.ListSnapshots()
 		if err != nil {
 			log.Fatal(err)
 		}
-		var newlinesRegexp *regexp.Regexp
-		newlinesRegexp = regexp.MustCompile("^\r?\n$")
 		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
-		oldSnapshot, err := magento.LoadSnapshot(names[diffRevs.Old].Name)
+		oldSnapshot, err := fb.LoadSnapshot(names[diffRevs.Old].Name)
 		if err != nil {
 			log.Fatal(err)
 		}
-		newSnapshot, err := magento.LoadSnapshot(names[diffRevs.New].Name)
+		newSnapshot, err := fb.LoadSnapshot(names[diffRevs.New].Name)
 		if err != nil {
 			log.Fatal(err)
 		}
-		diff, err := Diff(oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
-		for _, r := range diff.Lines {
-			value := newlinesRegexp.ReplaceAllString(r.NewValue, "\\n")
-			fmt.Printf(`config:set --scope="%s" --scope-id="%d" "%s" "%s"`,
-				r.Scope, r.ScopeId, r.Path, value)
-			fmt.Println("")
+
+		err = backend.Export(os.Stdout, oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
+		if err != nil {
+			log.Fatal(err)
 		}
 
 	} else if cmd == "diff" {
-		names, err := magento.ListSnapshots()
+		names, err := fb.ListSnapshots()
 		if err != nil {
 			log.Fatal(err)
 		}
 		diffRevs, err := GetDiffRevs(args[1], args[2], len(names))
 
-		oldSnapshot, err := magento.LoadSnapshot(names[diffRevs.Old].Name)
+		oldSnapshot, err := fb.LoadSnapshot(names[diffRevs.Old].Name)
 		if err != nil {
 			log.Fatal(err)
 		}
-		newSnapshot, err := magento.LoadSnapshot(names[diffRevs.New].Name)
+		newSnapshot, err := fb.LoadSnapshot(names[diffRevs.New].Name)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		diff, err := Diff(oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
+		diff, err := backend.Diff(oldSnapshot, newSnapshot, diffRevs.Old, diffRevs.New)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -146,7 +145,7 @@ Options:
 -host=host  host for serve command
 `)
 	} else if cmd == "serve" {
-		snapshotHandler := NewSnapshotHandler(magento)
+		snapshotHandler := NewSnapshotHandler(fb)
 		http.Handle("/", snapshotHandler)
 
 		url := fmt.Sprintf("%s:%d", *host, *port)
