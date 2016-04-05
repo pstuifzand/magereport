@@ -23,7 +23,6 @@ type SourceBackend interface {
 }
 
 type Backend interface {
-	TakeSnapshot(message string) error
 	ListSnapshots() ([]Snapshot, error)
 	LoadSnapshot(filename string) (SnapshotVars, error)
 	SaveSnapshot(vars SnapshotVars) error

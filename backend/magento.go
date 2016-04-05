@@ -70,7 +70,7 @@ func DatabaseConnectionString(filename string) (string, error) {
 	return conn.String(), nil
 }
 
-func DatabaseLoadConfig(db *sql.DB) (map[string]string, error) {
+func databaseLoadConfig(db *sql.DB) (map[string]string, error) {
 	rows, err := db.Query("SELECT `scope`, `scope_id`, `path`, `value` FROM `core_config_data` ORDER BY `path`, `value`")
 	if err != nil {
 		return nil, err
@@ -116,18 +116,18 @@ func InitMagento(configFilename string) (SourceBackend, error) {
 	return &magentoBackend{db}, nil
 }
 
-func (magento *magentoBackend) Close() {
-	magento.db.Close()
-}
-
 func (magento *magentoBackend) TakeSnapshot(message string) (SnapshotVars, error) {
 	db := magento.db
 
-	vars, err := DatabaseLoadConfig(db)
+	vars, err := databaseLoadConfig(db)
 	if err != nil {
 		return SnapshotVars{}, err
 	}
 	fs := SnapshotVars{message, vars}
 
 	return fs, nil
+}
+
+func (magento *magentoBackend) Close() {
+	magento.db.Close()
 }

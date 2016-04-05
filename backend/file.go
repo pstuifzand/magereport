@@ -18,20 +18,10 @@ func init() {
 }
 
 type FileBackend struct {
-	source SourceBackend
 }
 
-func InitFileBackend(source SourceBackend) Backend {
-	return &FileBackend{source}
-}
-
-func (this *FileBackend) TakeSnapshot(message string) error {
-	vars, err := this.source.TakeSnapshot(message)
-	if err != nil {
-		return err
-	}
-	err = this.SaveSnapshot(vars)
-	return err
+func InitFileBackend() Backend {
+	return &FileBackend{}
 }
 
 func loadOldVars(filename string) (SnapshotVars, error) {

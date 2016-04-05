@@ -9,11 +9,12 @@ import (
 )
 
 type SnapshotHandler struct {
+	Source  backend.SourceBackend
 	Backend backend.Backend
 }
 
-func NewSnapshotHandler(b backend.Backend) *SnapshotHandler {
-	return &SnapshotHandler{b}
+func NewSnapshotHandler(s backend.SourceBackend, b backend.Backend) *SnapshotHandler {
+	return &SnapshotHandler{s, b}
 }
 
 type ListInfo struct {
@@ -21,7 +22,8 @@ type ListInfo struct {
 }
 
 func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	magento := snapshotHandler.Backend
+	magento := snapshotHandler.Source
+	fb := snapshotHandler.Backend
 	values := r.URL.Query()
 	err := r.ParseForm()
 	if err != nil {
@@ -30,11 +32,16 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 	}
 	if strings.HasPrefix("/take", r.URL.Path) {
 		message := r.PostForm.Get("message")
-		magento.TakeSnapshot(message)
+		vars, err := magento.TakeSnapshot(message)
+		if err != nil {
+			http.Error(w, fmt.Sprint(err), 500)
+			return
+		}
+		fb.SaveSnapshot(vars)
 		http.Redirect(w, r, "/list", 302)
 		return
 	} else if strings.HasPrefix("/list", r.URL.Path) {
-		names, err := magento.ListSnapshots()
+		names, err := fb.ListSnapshots()
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
 		}
@@ -55,7 +62,7 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 		}
 		return
 	} else if strings.HasPrefix("/diff", r.URL.Path) {
-		names, err := magento.ListSnapshots()
+		names, err := fb.ListSnapshots()
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
 			return
@@ -67,12 +74,12 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			return
 		}
 
-		oldSnapshot, err := magento.LoadSnapshot(names[diffRevs.Old].Name)
+		oldSnapshot, err := fb.LoadSnapshot(names[diffRevs.Old].Name)
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
 			return
 		}
-		newSnapshot, err := magento.LoadSnapshot(names[diffRevs.New].Name)
+		newSnapshot, err := fb.LoadSnapshot(names[diffRevs.New].Name)
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
 			return
@@ -99,7 +106,7 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 		}
 		return
 	} else if strings.HasPrefix("/export", r.URL.Path) {
-		names, err := magento.ListSnapshots()
+		names, err := fb.ListSnapshots()
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
 			return
@@ -112,13 +119,13 @@ func (snapshotHandler *SnapshotHandler) ServeHTTP(w http.ResponseWriter, r *http
 			return
 		}
 
-		oldSnapshot, err := magento.LoadSnapshot(names[diffRevs.Old].Name)
+		oldSnapshot, err := fb.LoadSnapshot(names[diffRevs.Old].Name)
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
 			return
 		}
 
-		newSnapshot, err := magento.LoadSnapshot(names[diffRevs.New].Name)
+		newSnapshot, err := fb.LoadSnapshot(names[diffRevs.New].Name)
 		if err != nil {
 			http.Error(w, fmt.Sprint(err), 500)
 			return

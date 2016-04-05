@@ -61,12 +61,16 @@ func main() {
 	}
 	defer magento.Close()
 
-	fb := backend.InitFileBackend(magento)
+	fb := backend.InitFileBackend()
 
 	if cmd == "take" || cmd == "get" {
 		msg := ""
 		msg = *message
-		err := fb.TakeSnapshot(msg)
+		vars, err := magento.TakeSnapshot(msg)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = fb.SaveSnapshot(vars)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -145,7 +149,7 @@ Options:
 -host=host  host for serve command
 `)
 	} else if cmd == "serve" {
-		snapshotHandler := NewSnapshotHandler(fb)
+		snapshotHandler := NewSnapshotHandler(magento, fb)
 		http.Handle("/", snapshotHandler)
 
 		url := fmt.Sprintf("%s:%d", *host, *port)
